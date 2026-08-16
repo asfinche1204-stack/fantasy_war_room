@@ -1,0 +1,1019 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>War Room — Live Draft Optimizer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --field:#0D1512;        /* deep pine-black background */
+  --turf:#16211B;         /* panel */
+  --turf2:#1C2A22;        /* raised panel */
+  --line:#2A3A31;         /* hairlines */
+  --chalk:#EDEAE0;        /* primary text */
+  --chalk-dim:#9AA69E;    /* secondary text */
+  --gold:#E8B71A;         /* first-down gold: money, max bid, actions */
+  --red:#E2574C;          /* danger / over budget */
+  --qb:#D95D67; --rb:#4FBF8B; --wr:#4F9DDB; --te:#C98A4B; --k:#8B93A6; --dst:#7A8B7F;
+  --mono:'IBM Plex Mono',ui-monospace,monospace;
+  --sans:'IBM Plex Sans',system-ui,sans-serif;
+  --disp:'Barlow Condensed','Arial Narrow',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--field);color:var(--chalk);font-family:var(--sans);font-size:14px;height:100%}
+body{padding-top:62px;padding-bottom:96px} /* room for locked header + command strip */
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+input,select,textarea{font-family:var(--sans);background:rgba(13,21,18,.45);color:var(--chalk);border:1px solid var(--line);border-radius:6px;padding:8px 10px;font-size:14px;width:100%}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--gold);outline-offset:-1px}
+label{display:block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--chalk-dim);margin:10px 0 4px}
+h1,h2,h3{font-family:var(--disp);letter-spacing:.02em}
+.wrap{max-width:1180px;margin:0 auto;padding:0 12px}
+/* header */
+header{border-bottom:1px solid rgba(232,183,26,.18);padding:10px 0;position:fixed;top:0;left:0;right:0;background:rgba(13,21,18,.48);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);z-index:40;box-shadow:0 6px 18px rgba(0,0,0,.25)}
+header .wrap{display:flex;align-items:center;gap:14px}
+.brand{font-family:var(--disp);font-weight:800;font-size:22px;text-transform:uppercase;letter-spacing:.06em}
+.brand em{font-style:normal;background:linear-gradient(180deg,#FFE38A,#E8B71A 55%,#B8860B);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 0 6px rgba(232,183,26,.35))}
+nav{display:flex;gap:4px;margin-left:auto}
+nav button{padding:7px 14px;border-radius:6px;font-family:var(--disp);font-weight:600;font-size:15px;text-transform:uppercase;letter-spacing:.05em;color:var(--chalk-dim)}
+nav button.on{background:rgba(28,42,34,.55);color:var(--chalk);box-shadow:inset 0 -2px 0 var(--gold)}
+.sync-dot{width:8px;height:8px;border-radius:50%;background:var(--line)}
+.sync-dot.live{background:var(--rb);box-shadow:0 0 8px var(--rb);animation:pulse 2s infinite}
+@keyframes pulse{50%{opacity:.4}}
+@media (prefers-reduced-motion:reduce){.sync-dot.live{animation:none}}
+/* panels */
+.panel{background:linear-gradient(165deg,rgba(38,54,45,.40),rgba(16,24,20,.52));backdrop-filter:blur(9px);-webkit-backdrop-filter:blur(9px);border:1px solid rgba(232,183,26,.16);border-radius:12px;padding:14px;margin:12px 0;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 10px 26px rgba(0,0,0,.30)}
+.panel::before{content:'';position:absolute;inset:0 0 auto 0;height:44%;background:linear-gradient(180deg,rgba(255,255,255,.055),rgba(255,255,255,0));pointer-events:none}
+.panel h2{font-size:18px;text-transform:uppercase;color:var(--chalk);margin-bottom:8px;font-weight:700}
+.panel h2 small{color:var(--chalk-dim);font-family:var(--sans);font-size:11px;text-transform:none;letter-spacing:0;font-weight:400;margin-left:8px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.btn{background:rgba(28,42,34,.5);border:1px solid var(--line);border-radius:7px;padding:9px 14px;font-weight:600;font-size:13px;backdrop-filter:blur(4px)}
+.btn:hover{border-color:var(--gold)}
+.btn.gold{background:linear-gradient(180deg,#F7D258,#E8B71A 60%,#C79812);color:#141005;border-color:#C79812;box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 2px 10px rgba(232,183,26,.28);text-shadow:0 1px 0 rgba(255,255,255,.3)}
+.btn.danger{color:var(--red);border-color:var(--red)}
+.btn.sm{padding:5px 9px;font-size:12px}
+.muted{color:var(--chalk-dim);font-size:12px;line-height:1.5}
+.mono{font-family:var(--mono)}
+.tag{display:inline-block;padding:2px 7px;border-radius:4px;font-family:var(--mono);font-size:11px;font-weight:600}
+.pos-QB{background:rgba(217,93,103,.16);color:var(--qb)}
+.pos-RB{background:rgba(79,191,139,.16);color:var(--rb)}
+.pos-WR{background:rgba(79,157,219,.16);color:var(--wr)}
+.pos-TE{background:rgba(201,138,75,.16);color:var(--te)}
+.pos-K{background:rgba(139,147,166,.16);color:var(--k)}
+.pos-DST,.pos-DEF{background:rgba(122,139,127,.16);color:var(--dst)}
+/* layout: draft room */
+.room{display:grid;grid-template-columns:minmax(0,7fr) minmax(0,5fr);gap:12px;align-items:start}
+@media(max-width:880px){.room{grid-template-columns:1fr}.grid4{grid-template-columns:1fr 1fr}.grid3{grid-template-columns:1fr}}
+/* player rows */
+.plist{max-height:520px;overflow-y:auto;border:1px solid var(--line);border-radius:8px}
+.prow{display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid var(--line);cursor:pointer}
+.prow:hover{background:rgba(28,42,34,.5)}
+.prow.taken{opacity:.32;text-decoration:line-through;cursor:default}
+.prow .name{font-weight:600;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.prow .name span{color:var(--chalk-dim);font-weight:400;font-size:12px;margin-left:6px}
+.prow .val{font-family:var(--mono);font-size:13px;color:var(--gold);min-width:44px;text-align:right}
+.prow .rk{font-family:var(--mono);font-size:11px;color:var(--chalk-dim);min-width:34px}
+.prow .flag{font-size:10px;color:var(--red);font-weight:600;letter-spacing:.05em}
+/* recommendations */
+.rec{border:1px solid rgba(232,183,26,.18);border-left:3px solid var(--gold);border-radius:8px;padding:10px 12px;margin:8px 0;background:linear-gradient(160deg,rgba(46,63,52,.42),rgba(22,33,27,.55));backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.07)}
+.rec::after{content:'';position:absolute;top:-60%;bottom:-60%;left:-40%;width:32%;background:linear-gradient(105deg,transparent,rgba(255,255,255,.10),transparent);transform:skewX(-18deg);transition:left .55s ease;pointer-events:none}
+.rec:hover::after{left:135%}
+.rec .top{display:flex;align-items:baseline;gap:10px}
+.rec .top .name{font-family:var(--disp);font-size:19px;font-weight:700;letter-spacing:.02em}
+.rec .top .val{margin-left:auto;font-family:var(--mono);color:var(--gold);font-weight:600;font-size:16px}
+.rec .why{color:var(--chalk-dim);font-size:12px;margin-top:3px;line-height:1.5}
+/* roster */
+.slot{display:flex;align-items:center;gap:10px;padding:7px 10px;border-bottom:1px solid var(--line)}
+.slot .sl{font-family:var(--disp);font-weight:700;font-size:15px;width:52px;color:var(--chalk-dim)}
+.slot .who{flex:1;font-weight:600}
+.slot .who.empty{color:var(--chalk-dim);font-weight:400;font-style:italic}
+.slot .paid{font-family:var(--mono);color:var(--gold)}
+.slot .plan{font-family:var(--mono);font-size:12px;color:var(--chalk-dim)}
+/* budget board */
+.bteam{display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1px solid var(--line);font-size:13px}
+.bteam .nm{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bteam .mono{color:var(--gold)}
+.bteam .mx{color:var(--chalk-dim);font-size:11px}
+.bteam.me{background:rgba(232,183,26,.10)}
+/* command strip — signature element */
+#strip{position:fixed;left:0;right:0;bottom:0;background:linear-gradient(180deg,rgba(40,55,45,.5),rgba(14,22,18,.68));backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-top:2px solid var(--gold);z-index:50;padding:8px 0 max(8px,env(safe-area-inset-bottom));box-shadow:0 -10px 30px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.09)}
+#strip::before{content:'';position:absolute;top:-2px;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,#FFE38A,transparent);background-size:220px 100%;background-repeat:no-repeat;animation:shimmer 5s linear infinite}
+@keyframes shimmer{from{background-position:-220px 0}to{background-position:calc(100% + 220px) 0}}
+#strip .wrap{display:flex;align-items:center;gap:18px}
+#strip .big{font-family:var(--disp);font-weight:800;font-size:40px;line-height:1;min-width:110px;background:linear-gradient(180deg,#FFE38A,#E8B71A 55%,#C79812);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 0 8px rgba(232,183,26,.28))}
+#strip .big.red{background:none;-webkit-text-fill-color:var(--red);color:var(--red);filter:drop-shadow(0 0 8px rgba(226,87,76,.35))}
+#strip .lbl{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--chalk-dim)}
+#strip .cell{display:flex;flex-direction:column;gap:1px}
+#strip .mid{font-family:var(--disp);font-weight:700;font-size:22px;line-height:1.1}
+#strip .spacer{flex:1}
+@media(max-width:640px){#strip .big{font-size:32px;min-width:84px}#strip .mid{font-size:17px}#strip .wrap{gap:12px}}
+/* modal */
+#modal{position:fixed;inset:0;background:rgba(0,0,0,.62);display:none;align-items:center;justify-content:center;z-index:80;padding:14px}
+#modal.open{display:flex}
+#modal .box{background:rgba(22,33,27,.82);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(232,183,26,.2);border-radius:12px;padding:16px;width:100%;max-width:430px}
+.teamchips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.teamchips button{border:1px solid var(--line);border-radius:6px;padding:6px 10px;font-size:12px}
+.teamchips button.on{background:var(--gold);color:#141005;border-color:var(--gold)}
+.toast{position:fixed;top:74px;left:50%;transform:translateX(-50%);background:var(--turf2);border:1px solid var(--gold);border-radius:8px;padding:9px 16px;z-index:90;font-weight:600;display:none}
+table.small{width:100%;border-collapse:collapse;font-size:12px}
+table.small td,table.small th{padding:4px 6px;border-bottom:1px solid var(--line);text-align:left}
+table.small th{color:var(--chalk-dim);font-weight:500;font-size:11px;text-transform:uppercase;letter-spacing:.06em}
+.viewtabs{display:flex;gap:4px;margin-bottom:8px}
+.viewtabs button{padding:5px 11px;border-radius:6px;font-size:12px;font-weight:600;color:var(--chalk-dim);border:1px solid transparent}
+.viewtabs button.on{color:var(--chalk);border-color:var(--line);background:rgba(28,42,34,.55)}
+.searchbar{position:relative}
+.searchbar input{padding:11px 12px;font-size:16px}
+.hidden{display:none!important}
+/* ===== stadium atmosphere ===== */
+#bg{position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none}
+#bg .mow{position:absolute;inset:-10%;background:repeating-linear-gradient(90deg,rgba(255,255,255,.014) 0 130px,rgba(0,0,0,.028) 130px 260px)}
+#bg .yards{position:absolute;inset:-260px -10% 0;background:
+ repeating-linear-gradient(180deg,transparent 0 118px,rgba(237,234,224,.055) 118px 120px),
+ repeating-linear-gradient(180deg,transparent 0 22px,rgba(237,234,224,.02) 22px 24px);
+ animation:fieldScroll 48s linear infinite}
+@keyframes fieldScroll{to{transform:translateY(240px)}}
+#bg .glow{position:absolute;width:62vmax;height:62vmax;border-radius:50%;filter:blur(72px)}
+#bg .g1{background:radial-gradient(circle,rgba(232,183,26,.8),transparent 60%);opacity:.14;top:-32vmax;left:-18vmax;animation:drift1 26s ease-in-out infinite alternate}
+#bg .g2{background:radial-gradient(circle,rgba(79,191,139,.8),transparent 60%);opacity:.10;bottom:-34vmax;right:-20vmax;animation:drift2 34s ease-in-out infinite alternate}
+@keyframes drift1{to{transform:translate(9vmax,7vmax)}}
+@keyframes drift2{to{transform:translate(-8vmax,-6vmax)}}
+#bg .ball{position:absolute;width:320px;top:16%;left:-380px;opacity:.055;animation:ballFly 58s linear infinite}
+@keyframes ballFly{from{transform:translateX(0) rotate(-16deg)}to{transform:translateX(calc(100vw + 780px)) rotate(18deg)}}
+#fx{position:absolute;inset:0;width:100%;height:100%}
+main{position:relative;z-index:1}
+@media (prefers-reduced-motion:reduce){#bg .yards,#bg .glow,#bg .ball,#strip::before{animation:none}#fx,#bg .ball{display:none}}
+</style>
+</head>
+<body>
+<div id="bg" aria-hidden="true">
+  <div class="mow"></div>
+  <div class="yards"></div>
+  <div class="glow g1"></div>
+  <div class="glow g2"></div>
+  <svg class="ball" viewBox="0 0 320 200" fill="none">
+    <ellipse cx="160" cy="100" rx="150" ry="88" stroke="#E8B71A" stroke-width="5"/>
+    <path d="M160 46 v108 M120 100 h80 M132 78 v44 M160 70 v60 M188 78 v44" stroke="#E8B71A" stroke-width="5" stroke-linecap="round"/>
+  </svg>
+  <canvas id="fx"></canvas>
+</div>
+<header><div class="wrap">
+  <div class="brand">WAR<em>ROOM</em></div>
+  <div class="sync-dot" id="syncDot" title="Sleeper sync status"></div>
+  <span class="muted" id="syncLbl">not connected</span>
+  <nav>
+    <button data-tab="setup" class="on">Setup</button>
+    <button data-tab="ranks">Rankings</button>
+    <button data-tab="draft">Draft</button>
+  </nav>
+</div></header>
+
+<main class="wrap">
+
+<!-- ============ SETUP ============ -->
+<section id="tab-setup">
+  <div class="panel">
+    <h2>League profile <small>saved on this device — one per league</small></h2>
+    <div class="row" style="margin-bottom:8px">
+      <select id="profileSel" style="max-width:280px"></select>
+      <button class="btn sm" id="newProfile">+ New</button>
+      <button class="btn sm danger" id="delProfile">Delete</button>
+    </div>
+    <div class="grid3">
+      <div><label>League name</label><input id="pName" placeholder="e.g. Sleeper Dynasty 12"></div>
+      <div><label>Platform</label><select id="pPlatform"><option value="sleeper">Sleeper (live sync)</option><option value="espn">ESPN (manual tracking)</option></select></div>
+      <div><label>Draft type</label><select id="pType"><option value="snake">Snake</option><option value="auction">Auction</option></select></div>
+      <div><label>Teams</label><input id="pTeams" type="number" min="4" max="20" value="12"></div>
+      <div><label>Scoring</label><select id="pScoring"><option value="ppr">Full PPR</option><option value="half">Half PPR</option><option value="std">Standard</option></select></div>
+      <div><label>My draft slot (snake)</label><input id="pSlot" type="number" min="1" max="20" value="1"></div>
+    </div>
+    <div class="grid4" id="auctionCfg">
+      <div><label>Budget per team ($)</label><input id="pBudget" type="number" value="200"></div>
+      <div><label>Bench reserve ($)</label><input id="pReserve" type="number" value="10"><div class="muted">Held back for bench / injury cover</div></div>
+    </div>
+    <label>Roster slots</label>
+    <div class="grid4">
+      <div><label>QB</label><input id="sQB" type="number" min="0" value="1"></div>
+      <div><label>RB</label><input id="sRB" type="number" min="0" value="2"></div>
+      <div><label>WR</label><input id="sWR" type="number" min="0" value="2"></div>
+      <div><label>TE</label><input id="sTE" type="number" min="0" value="1"></div>
+      <div><label>FLEX (R/W/T)</label><input id="sFLEX" type="number" min="0" value="1"></div>
+      <div><label>SUPERFLEX</label><input id="sSFLX" type="number" min="0" value="0"></div>
+      <div><label>K</label><input id="sK" type="number" min="0" value="1"></div>
+      <div><label>DST</label><input id="sDST" type="number" min="0" value="1"></div>
+      <div><label>Bench</label><input id="sBN" type="number" min="0" value="6"></div>
+    </div>
+    <div class="row" style="margin-top:12px"><button class="btn gold" id="saveProfile">Save profile</button><span class="muted" id="saveMsg"></span></div>
+  </div>
+
+  <div class="panel" id="sleeperPanel">
+    <h2>Sleeper connection <small>live pick sync — read-only, no login</small></h2>
+    <div class="grid3">
+      <div><label>Sleeper username</label><input id="slUser" placeholder="your username"></div>
+      <div><label>Season</label><input id="slSeason" value="2026"></div>
+      <div style="align-self:end"><button class="btn" id="slFind">Find my drafts</button></div>
+    </div>
+    <div id="slDrafts" style="margin-top:10px"></div>
+    <p class="muted" style="margin-top:8px">Heads up: sync only works when this file is opened directly in a browser tab (not inside the Claude preview, which blocks outside requests). ESPN has no live draft feed, so ESPN leagues use the fast manual tracker instead.</p>
+  </div>
+</section>
+
+<!-- ============ RANKINGS ============ -->
+<section id="tab-ranks" class="hidden">
+  <div class="panel">
+    <h2>Player pool <small>blend FantasyPros with Sleeper's rankings</small></h2>
+    <div class="row">
+      <button class="btn" id="loadSleeperPlayers">Load Sleeper player database</button>
+      <span class="muted" id="slpMsg">not loaded</span>
+    </div>
+    <label style="margin-top:14px">Paste FantasyPros CSV (optional — export from their rankings page)</label>
+    <textarea id="fpCsv" rows="5" placeholder="RK,PLAYER NAME,TEAM,POS,AAV,FPTS ... header row + data rows"></textarea>
+    <div class="row" style="margin-top:8px">
+      <button class="btn" id="parseCsv">Import CSV</button>
+      <span class="muted" id="csvMsg"></span>
+    </div>
+    <label style="margin-top:14px">Blend weight — FantasyPros <span class="mono" id="blendLbl">60%</span> / Sleeper <span class="mono" id="blendLbl2">40%</span></label>
+    <input type="range" id="blend" min="0" max="100" value="60" style="padding:0">
+    <div class="row" style="margin-top:10px"><button class="btn gold" id="buildPool">Build player pool</button><button class="btn danger" id="clearPool">Clear pool data</button><span class="muted" id="poolMsg"></span></div>
+  </div>
+  <div class="panel">
+    <h2>Pool preview</h2>
+    <div class="plist" id="poolPreview" style="max-height:420px"></div>
+  </div>
+</section>
+
+<!-- ============ DRAFT ============ -->
+<section id="tab-draft" class="hidden">
+  <div class="room">
+    <div>
+      <div class="panel">
+        <h2 id="draftTitle">Draft board</h2>
+        <div class="searchbar"><input id="search" placeholder="Search player — tap to mark drafted" autocomplete="off"></div>
+        <div class="viewtabs">
+          <button data-view="best" class="on">Best available</button>
+          <button data-view="QB">QB</button><button data-view="RB">RB</button><button data-view="WR">WR</button><button data-view="TE">TE</button><button data-view="K">K</button><button data-view="DST">DST</button>
+        </div>
+        <div class="plist" id="board"></div>
+        <div class="row" style="margin-top:8px">
+          <button class="btn sm" id="undoBtn">Undo last pick</button>
+          <button class="btn sm danger" id="resetDraft">Reset draft</button>
+          <span class="muted" id="pickCount"></span>
+        </div>
+      </div>
+      <div class="panel">
+        <h2>Recommendations</h2>
+        <div id="recs"></div>
+      </div>
+    </div>
+    <div>
+      <div class="panel">
+        <h2>My roster</h2>
+        <div id="myRoster"></div>
+      </div>
+      <div class="panel" id="budgetPanel">
+        <h2>Budget board <small>league money remaining</small></h2>
+        <div id="budgets"></div>
+        <div class="muted" style="margin-top:8px" id="inflLbl"></div>
+      </div>
+      <div class="panel">
+        <h2>Recent picks</h2>
+        <div id="recent" style="max-height:220px;overflow-y:auto"></div>
+      </div>
+    </div>
+  </div>
+</section>
+</main>
+
+<!-- command strip -->
+<div id="strip"><div class="wrap">
+  <div class="cell"><div class="lbl" id="bigLbl">Max bid</div><div class="big" id="bigVal">—</div></div>
+  <div class="cell"><div class="lbl">Starter spots open</div><div class="mid" id="spotsVal">—</div></div>
+  <div class="cell"><div class="lbl" id="cash1Lbl">Budget left</div><div class="mid" id="cash1">—</div></div>
+  <div class="cell"><div class="lbl" id="cash2Lbl">After bench reserve</div><div class="mid" id="cash2">—</div></div>
+  <div class="spacer"></div>
+  <div class="cell" style="text-align:right"><div class="lbl">Top target</div><div class="mid" id="target">—</div></div>
+</div></div>
+
+<!-- pick modal -->
+<div id="modal"><div class="box">
+  <h2 id="mName" style="font-size:22px"></h2>
+  <div class="muted" id="mMeta"></div>
+  <div id="mAuction">
+    <label>Winning bid ($)</label><input id="mPrice" type="number" min="1" inputmode="numeric">
+    <label>Drafted by</label>
+    <div class="teamchips" id="mTeams"></div>
+  </div>
+  <div id="mSnake"><label>Drafted by</label>
+    <div class="teamchips" id="mTeams2"></div>
+  </div>
+  <div class="row" style="margin-top:14px">
+    <button class="btn gold" id="mConfirm">Confirm pick</button>
+    <button class="btn" id="mCancel">Cancel</button>
+  </div>
+</div></div>
+<div class="toast" id="toast"></div>
+<script>
+/* ================= state & persistence ================= */
+const store = {
+  get(k,d){ try{ const v=localStorage.getItem('wr_'+k); return v?JSON.parse(v):d }catch(e){ return d } },
+  set(k,v){ try{ localStorage.setItem('wr_'+k, JSON.stringify(v)) }catch(e){} }
+};
+const $=id=>document.getElementById(id);
+const uid=()=>Math.random().toString(36).slice(2,9);
+let profiles = store.get('profiles', []);
+let activeId = store.get('activeId', null);
+let slimPlayers = store.get('slimPlayers', null);   // [{id,n,p,t,sr}]
+let fpRows = store.get('fpRows', null);             // parsed CSV rows
+let pool = [];                                      // built pool
+let drafts = store.get('drafts', {});               // per-profile: {picks:[{pid,by,price}], teamNames:[], sleeper:{draftId}}
+let view='best', pollTimer=null;
+
+function prof(){ return profiles.find(p=>p.id===activeId) }
+function dstate(){
+  if(!activeId) return null;
+  if(!drafts[activeId]){
+    const p=prof(); const names=[]; for(let i=1;i<=(p?p.teams:12);i++) names.push('Team '+i);
+    drafts[activeId]={picks:[],teamNames:names,sleeper:{}};
+  }
+  return drafts[activeId];
+}
+function saveDrafts(){ store.set('drafts',drafts) }
+function toast(msg){ const t=$('toast'); t.textContent=msg; t.style.display='block'; clearTimeout(t._x); t._x=setTimeout(()=>t.style.display='none',2200) }
+function norm(s){ return (s||'').toLowerCase().replace(/[.'\u2019-]/g,'').replace(/\s+(jr|sr|ii|iii|iv|v)$/,'').replace(/\s+/g,' ').trim() }
+
+/* ================= profiles UI ================= */
+function defaultProfile(){ return {id:uid(),name:'New league',platform:'sleeper',type:'auction',teams:12,scoring:'ppr',slot:1,budget:200,reserve:10,
+  slots:{QB:1,RB:2,WR:2,TE:1,FLEX:1,SFLX:0,K:1,DST:1,BN:6}} }
+function renderProfileSel(){
+  const s=$('profileSel'); s.innerHTML='';
+  profiles.forEach(p=>{ const o=document.createElement('option'); o.value=p.id; o.textContent=p.name+' — '+p.type+' / '+p.platform; s.appendChild(o) });
+  if(activeId) s.value=activeId;
+}
+function loadProfileForm(){
+  const p=prof(); if(!p) return;
+  $('pName').value=p.name; $('pPlatform').value=p.platform; $('pType').value=p.type;
+  $('pTeams').value=p.teams; $('pScoring').value=p.scoring; $('pSlot').value=p.slot;
+  $('pBudget').value=p.budget; $('pReserve').value=p.reserve;
+  for(const k of ['QB','RB','WR','TE','FLEX','SFLX','K','DST','BN']) $('s'+k).value=p.slots[k];
+  $('auctionCfg').style.display = p.type==='auction' ? 'grid':'none';
+  $('sleeperPanel').style.display = p.platform==='sleeper' ? 'block':'none';
+}
+$('profileSel').onchange=e=>{ activeId=e.target.value; store.set('activeId',activeId); loadProfileForm(); refreshAll() };
+$('newProfile').onclick=()=>{ const p=defaultProfile(); profiles.push(p); activeId=p.id; store.set('activeId',activeId); store.set('profiles',profiles); renderProfileSel(); loadProfileForm() };
+$('delProfile').onclick=()=>{ if(!activeId) return; profiles=profiles.filter(p=>p.id!==activeId); delete drafts[activeId]; activeId=profiles[0]?profiles[0].id:null; store.set('profiles',profiles); store.set('activeId',activeId); saveDrafts(); renderProfileSel(); if(activeId) loadProfileForm() };
+$('pType').onchange=e=>{ $('auctionCfg').style.display=e.target.value==='auction'?'grid':'none' };
+$('pPlatform').onchange=e=>{ $('sleeperPanel').style.display=e.target.value==='sleeper'?'block':'none' };
+$('saveProfile').onclick=()=>{
+  let p=prof(); if(!p){ p=defaultProfile(); profiles.push(p); activeId=p.id; store.set('activeId',activeId) }
+  p.name=$('pName').value||'League'; p.platform=$('pPlatform').value; p.type=$('pType').value;
+  p.teams=+$('pTeams').value||12; p.scoring=$('pScoring').value; p.slot=+$('pSlot').value||1;
+  p.budget=+$('pBudget').value||200; p.reserve=+$('pReserve').value||0;
+  for(const k of ['QB','RB','WR','TE','FLEX','SFLX','K','DST','BN']) p.slots[k]=+$('s'+k).value||0;
+  store.set('profiles',profiles); renderProfileSel(); $('saveMsg').textContent='Saved.'; setTimeout(()=>$('saveMsg').textContent='',1800);
+  // ensure team names length
+  const d=dstate(); while(d.teamNames.length<p.teams) d.teamNames.push('Team '+(d.teamNames.length+1)); d.teamNames.length=p.teams; saveDrafts();
+  refreshAll();
+};
+
+/* ================= tabs ================= */
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('nav button').forEach(x=>x.classList.remove('on')); b.classList.add('on');
+  ['setup','ranks','draft'].forEach(t=>$('tab-'+t).classList.toggle('hidden', t!==b.dataset.tab));
+  if(b.dataset.tab==='draft') refreshAll();
+});
+
+/* ================= Sleeper API ================= */
+const SL='https://api.sleeper.app/v1';
+async function slGet(p){ const r=await fetch(SL+p); if(!r.ok) throw new Error('Sleeper '+r.status); return r.json() }
+$('slFind').onclick=async()=>{
+  try{
+    const u=$('slUser').value.trim(); if(!u) return toast('Enter your Sleeper username');
+    const user=await slGet('/user/'+encodeURIComponent(u));
+    const season=$('slSeason').value.trim()||'2026';
+    const ds=await slGet(`/user/${user.user_id}/drafts/nfl/${season}`);
+    const el=$('slDrafts'); el.innerHTML='';
+    if(!ds.length){ el.innerHTML='<p class="muted">No drafts found for '+season+'.</p>'; return }
+    ds.forEach(d=>{
+      const row=document.createElement('div'); row.className='row'; row.style.margin='6px 0';
+      const meta=`${d.type||''} · ${d.settings&&d.settings.teams?d.settings.teams+' teams':''} · ${d.status}`;
+      row.innerHTML=`<span style="flex:1"><b>${d.metadata&&d.metadata.name?d.metadata.name:'Draft'}</b> <span class="muted">${meta}</span></span>`;
+      const btn=document.createElement('button'); btn.className='btn sm gold'; btn.textContent='Connect';
+      btn.onclick=()=>connectSleeper(d.draft_id, user.user_id);
+      row.appendChild(btn); el.appendChild(row);
+    });
+  }catch(e){ toast('Sleeper lookup failed — open this file in a normal browser tab'); }
+};
+async function connectSleeper(draftId, userId){
+  try{
+    const d=await slGet('/draft/'+draftId);
+    const p=prof(); if(!p) return toast('Save a profile first');
+    p.teams = d.settings && d.settings.teams ? d.settings.teams : p.teams;
+    if(d.type==='auction'){ p.type='auction'; if(d.settings&&d.settings.budget) p.budget=d.settings.budget }
+    else p.type='snake';
+    if(d.draft_order && d.draft_order[userId]) p.slot=d.draft_order[userId];
+    store.set('profiles',profiles); loadProfileForm();
+    const st=dstate(); st.sleeper={draftId, userId, order:d.draft_order||{}};
+    // team names from draft order if available
+    saveDrafts();
+    startPolling(); toast('Connected — live sync on');
+  }catch(e){ toast('Could not connect: '+e.message) }
+}
+function startPolling(){
+  stopPolling();
+  const st=dstate(); if(!st||!st.sleeper.draftId) return;
+  $('syncDot').classList.add('live'); $('syncLbl').textContent='live sync';
+  const tick=async()=>{
+    try{
+      const picks=await slGet(`/draft/${st.sleeper.draftId}/picks`);
+      const p=prof(); const mySlot=p.slot;
+      const mapped=picks.map(pk=>({
+        pid:String(pk.player_id),
+        by: pk.draft_slot || 0,
+        price: pk.metadata && pk.metadata.amount ? +pk.metadata.amount : null,
+        nm: pk.metadata ? (pk.metadata.first_name+' '+pk.metadata.last_name) : ''
+      }));
+      if(JSON.stringify(mapped)!==JSON.stringify(st.picks)){ st.picks=mapped; saveDrafts(); refreshAll() }
+    }catch(e){ $('syncLbl').textContent='sync error — retrying' }
+  };
+  tick(); pollTimer=setInterval(tick, 4000);
+}
+function stopPolling(){ if(pollTimer){clearInterval(pollTimer); pollTimer=null} $('syncDot').classList.remove('live'); $('syncLbl').textContent='not connected' }
+
+/* ================= player pool ================= */
+$('loadSleeperPlayers').onclick=async()=>{
+  $('slpMsg').textContent='downloading (~5 MB)…';
+  try{
+    const all=await slGet('/players/nfl');
+    const keep=['QB','RB','WR','TE','K','DEF'];
+    slimPlayers=Object.values(all)
+      .filter(x=>x&&keep.includes(x.position)&&x.search_rank&&x.search_rank<600&&(x.team||x.position==='DEF'))
+      .map(x=>({id:String(x.player_id),n:x.position==='DEF'?(x.player_id+' D/ST'):(x.full_name||x.first_name+' '+x.last_name),p:x.position==='DEF'?'DST':x.position,t:x.team||'',sr:x.search_rank,e:x.espn_id||null}));
+    slimPlayers.sort((a,b)=>a.sr-b.sr);
+    store.set('slimPlayers',slimPlayers);
+    $('slpMsg').textContent=slimPlayers.length+' players loaded ✓';
+  }catch(e){ $('slpMsg').textContent='failed — open file in a normal browser tab' }
+};
+$('blend').oninput=e=>{ $('blendLbl').textContent=e.target.value+'%'; $('blendLbl2').textContent=(100-e.target.value)+'%' };
+$('parseCsv').onclick=()=>{
+  const txt=$('fpCsv').value.trim(); if(!txt) return $('csvMsg').textContent='paste CSV first';
+  const lines=txt.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+  // detect delimiter (FantasyPros web copies are often tab- or run-on text, downloads are CSV)
+  const cnt=d=>lines.slice(0,6).reduce((a,l)=>a+(l.split(d).length-1),0);
+  const delim=cnt('\t')>cnt(',')?'\t':',';
+  const split=l=>{const out=[];let cur='',q=false;for(const c of l){if(c==='"')q=!q;else if(c===delim&&!q){out.push(cur);cur=''}else cur+=c}out.push(cur);return out.map(s=>s.trim().replace(/^"|"$/g,''))};
+  const cleanLine=s=>s.replace(/\b\d+\s*out of\s*\d+\b/gi,' ').replace(/\bstars?\b/gi,' ').replace(/\s+/g,' ').trim();
+  const POSRE=/\b(QB|RB|WR|TE|K|DST|DEF|D\/ST)\d{0,2}\b/i;
+  const VALIDPOS=['QB','RB','WR','TE','K','DST'];
+  const mineName=raw=>{ // find a human name (needs lowercase letters, 2-3 words) inside noisy text
+    const cands=raw.match(/\b[A-Z][A-Za-z.'\-]+(?:\s[A-Z][A-Za-z.'\-]+){1,2}\b/g)||[];
+    return cands.find(c=>/[a-z]/.test(c)&&!/out of|star/i.test(c))||'';
+  };
+  const hdr=split(lines[0]).map(h=>h.toLowerCase());
+  const find=(...keys)=>hdr.findIndex(h=>keys.some(k=>h.includes(k)));
+  const iRk=find('rk','rank'), iNm=find('player','name'), iTm=find('team'), iPs=find('pos'),
+        iAv=find('aav','auction','value','$'), iPt=find('fpts','proj','points'), iTier=find('tier');
+  const structured = iNm>=0 && split(lines[1]||'').length>=3;
+  fpRows=[]; const seen=new Set();
+  for(let i=1;i<lines.length;i++){
+    const raw=cleanLine(lines[i]); if(!raw) continue;
+    let name='',team='',pos='',rk=fpRows.length+1,aav=null,pts=null,tier=null;
+    if(structured){
+      const c=split(lines[i]); if(c.length>=2){
+        name=cleanLine(c[iNm]||'');
+        team=iTm>=0?(c[iTm]||''):''; pos=iPs>=0?(c[iPs]||''):'';
+        if(iRk>=0&&parseInt(c[iRk]))rk=parseInt(c[iRk]);
+        if(iAv>=0)aav=parseFloat(String(c[iAv]).replace(/[^0-9.]/g,''))||null;
+        if(iPt>=0)pts=parseFloat(c[iPt])||null;
+        if(iTier>=0)tier=+c[iTier]||null;
+      }
+    }
+    name=name.replace(/\s*\(.*?\)\s*/g,'').trim();
+    // repair pass: parsed name must look like an actual name, else mine the raw line
+    if(!/^[A-Za-z][A-Za-z.'\- ]{3,30}$/.test(name)||!/[a-z]/.test(name)){
+      name=mineName(raw); if(!name) continue;
+      const rm=raw.match(/^(\d{1,3})\b/); if(rm) rk=+rm[1];
+      const am=raw.match(/\$\s?(\d+)/); if(am&&aav==null) aav=+am[1];
+      const tm=raw.match(/\b([A-Z]{2,3})\s+(?:QB|RB|WR|TE|K|DST|DEF|D\/ST)\d{0,2}\b/); if(tm) team=tm[1];
+    }
+    name=name.replace(/\s+(Jr\.?|Sr\.?|II|III|IV|V)$/,'').replace(/\s+[A-Z]{2,3}$/,'').trim();
+    pos=String(pos).replace(/[^A-Za-z\/]/g,'').toUpperCase();
+    if(pos==='DEF'||pos==='D/ST')pos='DST';
+    if(!VALIDPOS.includes(pos)){ const pm=raw.match(POSRE); if(pm){pos=pm[1].toUpperCase(); if(pos==='DEF'||pos==='D/ST')pos='DST'} }
+    if(!VALIDPOS.includes(pos)) continue;
+    const key=norm(name); if(!key||seen.has(key)) continue; seen.add(key);
+    fpRows.push({rk,name,team,pos,aav,pts,tier});
+  }
+  fpRows.sort((a,b)=>a.rk-b.rk);
+  store.set('fpRows',fpRows);
+  $('csvMsg').textContent=fpRows.length+' rows imported \u2713 ('+(structured?'table':'pattern-repair')+' mode)';
+};
+function buildPool(){
+  const p=prof(); if(!p) return toast('Save a profile first');
+  const w=(+$('blend').value)/100;
+  const bySleeper=new Map(); (slimPlayers||[]).forEach(s=>bySleeper.set(norm(s.n),s));
+  pool=[];
+  const used=new Set(); const namesInPool=new Set();
+  if(fpRows&&fpRows.length){
+    fpRows.forEach(r=>{
+      const sl=bySleeper.get(norm(r.name));
+      const pos=r.pos||(sl?sl.p:''); if(!pos) return;
+      const slRank=sl?sl.sr:r.rk*1.4;
+      const blendRank=w*r.rk+(1-w)*slRank;
+      if(namesInPool.has(norm(r.name))) return;
+      pool.push({id:sl?sl.id:'fp_'+norm(r.name),name:r.name,pos,team:r.team||(sl?sl.t:''),fpRank:r.rk,aav:r.aav,fpPts:r.pts,tier:r.tier,slRank,blendRank,espn:sl?sl.e:null});
+      namesInPool.add(norm(r.name));
+      if(sl) used.add(sl.id);
+    });
+  }
+  (slimPlayers||[]).forEach(s=>{ if(!used.has(s.id)&&(!fpRows||!fpRows.length||s.sr<600)){
+    if(namesInPool.has(norm(s.n))) return;
+    if(fpRows&&fpRows.length&&pool.some(x=>x.id===s.id)) return;
+    namesInPool.add(norm(s.n));
+    pool.push({id:s.id,name:s.n,pos:s.p,team:s.t,fpRank:null,aav:null,fpPts:null,tier:null,slRank:s.sr,blendRank:s.sr*(fpRows&&fpRows.length?1.15:1),espn:s.e||null});
+  }});
+  if(!pool.length) return toast('Load Sleeper players or import a CSV first');
+  pool.sort((a,b)=>a.blendRank-b.blendRank);
+  computeValues();
+  store.set('poolCache',pool.slice(0,450));
+  $('poolMsg').textContent=pool.length+' players in pool ✓';
+  renderPoolPreview(); refreshAll();
+}
+$('buildPool').onclick=buildPool;
+$('clearPool').onclick=()=>{
+  if(!confirm('Clear all player pool data? (Sleeper player DB, imported CSV, built pool)\nLeague profiles and draft picks are kept.')) return;
+  slimPlayers=null; fpRows=null; pool=[];
+  try{ localStorage.removeItem('wr_slimPlayers'); localStorage.removeItem('wr_fpRows'); localStorage.removeItem('wr_poolCache'); }catch(e){}
+  $('slpMsg').textContent='not loaded'; $('csvMsg').textContent=''; $('poolMsg').textContent='pool cleared';
+  $('fpCsv').value=''; $('poolPreview').innerHTML='';
+  refreshAll(); toast('Player pool cleared \u2014 reload Sleeper DB / re-import CSV, then Build');
+};
+
+/* ================= value engine ================= */
+function synthPts(pos,rank,scoring){
+  const m = scoring==='ppr'?1: scoring==='half'? .93 : .86;
+  const r=Math.max(1,rank);
+  switch(pos){
+    case 'QB': return 385*Math.exp(-.028*(r-1));
+    case 'RB': return 335*m*Math.exp(-.052*(r-1));
+    case 'WR': return 345*m*Math.exp(-.042*(r-1));
+    case 'TE': return 285*m*Math.exp(-.070*(r-1));
+    case 'K':  return Math.max(60,152-3*(r-1));
+    case 'DST':return Math.max(50,145-4*(r-1));
+    default: return 0;
+  }
+}
+function replacementRank(pos,p){
+  const T=p.teams,s=p.slots;
+  switch(pos){
+    case 'QB': return T*(s.QB + .85*s.SFLX);
+    case 'RB': return T*(s.RB + .45*s.FLEX + .05*s.SFLX);
+    case 'WR': return T*(s.WR + .45*s.FLEX + .05*s.SFLX);
+    case 'TE': return T*(s.TE + .10*s.FLEX);
+    case 'K':  return T*s.K;
+    case 'DST':return T*s.DST;
+  } return T;
+}
+let replMap={};
+function computeValues(){
+  const p=prof(); if(!p||!pool.length) return;
+  // per-position rank from blended order
+  const cnt={};
+  pool.forEach(x=>{ cnt[x.pos]=(cnt[x.pos]||0)+1; x.posRank=cnt[x.pos];
+    x.pts = x.fpPts!=null ? x.fpPts : synthPts(x.pos,x.posRank,p.scoring); });
+  const repl={};
+  for(const pos of ['QB','RB','WR','TE','K','DST']){
+    const rr=Math.max(1,Math.round(replacementRank(pos,p)));
+    const at=pool.filter(x=>x.pos===pos)[rr-1];
+    repl[pos]=at?at.pts:synthPts(pos,rr,p.scoring);
+  }
+  replMap=repl;
+  pool.forEach(x=>{ x.vorp=Math.max(0,x.pts-(repl[x.pos]||0)) });
+  // auction dollars
+  const rosterSize=Object.values(p.slots).reduce((a,b)=>a+b,0);
+  const nDraftable=p.teams*rosterSize;
+  const poolMoney=p.teams*p.budget - nDraftable; // $1 minimum each
+  const top=pool.slice().sort((a,b)=>b.vorp-a.vorp).slice(0,nDraftable);
+  const sumV=top.reduce((a,x)=>a+x.vorp,0)||1;
+  const inTop=new Set(top.map(x=>x.id));
+  pool.forEach(x=>{
+    const base = inTop.has(x.id) ? 1+poolMoney*(x.vorp/sumV) : 1;
+    x.val = x.aav!=null ? Math.round((base + x.aav*(p.budget/200))/2) : Math.round(base);
+    if(x.val<1)x.val=1;
+  });
+}
+/* ================= draft math ================= */
+function takenSet(){ const st=dstate(); return new Set(st.picks.map(pk=>pk.pid)) }
+function matchPick(pk){ // resolve a pick to pool entry (sleeper id or name)
+  let pl=pool.find(x=>x.id===pk.pid);
+  if(!pl&&pk.nm) pl=pool.find(x=>norm(x.name)===norm(pk.nm));
+  return pl;
+}
+function myPicks(){ const p=prof(),st=dstate(); return st.picks.filter(pk=>pk.by===p.slot) }
+function openSlotsFor(teamSlot){ // remaining slots for any team, starters filled greedily
+  const p=prof(); const s={...p.slots};
+  const theirs=dstate().picks.filter(pk=>pk.by===teamSlot).map(matchPick).filter(Boolean);
+  const order=['QB','RB','WR','TE','K','DST'];
+  theirs.sort((a,b)=>b.pts-a.pts).forEach(pl=>{
+    if(order.includes(pl.pos)&&s[pl.pos]>0){s[pl.pos]--;return}
+    if(['RB','WR','TE'].includes(pl.pos)&&s.FLEX>0){s.FLEX--;return}
+    if(['QB','RB','WR','TE'].includes(pl.pos)&&s.SFLX>0){s.SFLX--;return}
+    if(s.BN>0){s.BN--;return}
+  });
+  return s;
+}
+function openSlots(){
+  const s=openSlotsFor(prof().slot);
+  const starterOpen=s.QB+s.RB+s.WR+s.TE+s.FLEX+s.SFLX+s.K+s.DST;
+  return {s,starterOpen,totalOpen:starterOpen+s.BN};
+}
+/* season starter points of a roster, with open slots valued at replacement level */
+function flexRepl(){ return Math.max(replMap.RB||0,replMap.WR||0,replMap.TE||0) }
+function sflxRepl(){ return Math.max(replMap.QB||0,flexRepl()) }
+function starterPtsOf(players){
+  const p=prof(); const s={...p.slots}; let tot=0;
+  players.slice().sort((a,b)=>b.pts-a.pts).forEach(pl=>{
+    if(s[pl.pos]>0){s[pl.pos]--;tot+=pl.pts;return}
+    if(['RB','WR','TE'].includes(pl.pos)&&s.FLEX>0){s.FLEX--;tot+=pl.pts;return}
+    if(['QB','RB','WR','TE'].includes(pl.pos)&&s.SFLX>0){s.SFLX--;tot+=pl.pts;return}
+  });
+  for(const k of ['QB','RB','WR','TE','K','DST']) tot+=(s[k]||0)*(replMap[k]||0);
+  tot+=(s.FLEX||0)*flexRepl()+(s.SFLX||0)*sflxRepl();
+  return tot;
+}
+function teamSpent(slot){ const st=dstate(); return st.picks.filter(pk=>pk.by===slot&&pk.price).reduce((a,pk)=>a+pk.price,0) }
+function teamCount(slot){ const st=dstate(); return st.picks.filter(pk=>pk.by===slot).length }
+function inflation(){
+  const p=prof(); if(p.type!=='auction')return 1;
+  const rosterSize=Object.values(p.slots).reduce((a,b)=>a+b,0);
+  let moneyLeft=0,slotsLeft=0;
+  for(let t=1;t<=p.teams;t++){ moneyLeft+=Math.max(0,p.budget-teamSpent(t)); slotsLeft+=Math.max(0,rosterSize-teamCount(t)) }
+  const taken=takenSet();
+  const avail=pool.filter(x=>!taken.has(x.id)).slice(0,slotsLeft);
+  const valLeft=avail.reduce((a,x)=>a+Math.max(0,x.val-1),0)||1;
+  return Math.max(.5,Math.min(2.5,(moneyLeft-slotsLeft)/valLeft));
+}
+function snakeNextPick(){
+  const p=prof(),st=dstate(); const T=p.teams, done=st.picks.length, cur=done+1;
+  for(let ov=cur;ov<cur+T*2+2;ov++){
+    const r=Math.ceil(ov/T), inR=ov-(r-1)*T;
+    const slot = r%2===1 ? inR : T-inR+1;
+    if(slot===p.slot) return {overall:ov, until:ov-cur, round:r};
+  }
+  return {overall:cur,until:0,round:1};
+}
+/* ================= recommendations =================
+   score = marginal season points added to my OPTIMAL starting lineup
+           (open slots priced at replacement level, so only above-replacement
+            production counts) + positional scarcity of remaining depth:
+   snake  -> the cost of waiting one more turn at that position
+   auction-> remaining startable supply vs league-wide unfilled demand   */
+function recommendations(){
+  const p=prof(); const taken=takenSet();
+  const avail=pool.filter(x=>!taken.has(x.id));
+  const mine=myPicks().map(matchPick).filter(Boolean);
+  const base=starterPtsOf(mine);
+  const gain=pl=>starterPtsOf(mine.concat([pl]))-base;
+  const {s}=openSlots();
+  const infl=p.type==='auction'?inflation():1;
+  const POS=['QB','RB','WR','TE','K','DST'];
+  let bestLaterGain={}, laterName={}, scar={}, dem={}, sup={}, nx=null;
+  if(p.type==='snake'){
+    nx=snakeNextPick();
+    const survivors=avail.slice(nx.until); // assume the top players by blended rank are gone
+    for(const pos of POS){
+      const later=survivors.find(x=>x.pos===pos);
+      bestLaterGain[pos]=later?gain(later):0;
+      laterName[pos]=later?later.name:'nobody startable';
+    }
+  }else{
+    for(let t=1;t<=p.teams;t++){
+      const st=openSlotsFor(t);
+      for(const pos of POS) dem[pos]=(dem[pos]||0)+st[pos];
+      dem.RB+= .45*st.FLEX + .25*st.SFLX;
+      dem.WR+= .45*st.FLEX + .20*st.SFLX;
+      dem.TE+= .10*st.FLEX + .05*st.SFLX;
+      dem.QB+= .50*st.SFLX;
+    }
+    for(const pos of POS){
+      sup[pos]=Math.max(1,avail.filter(x=>x.pos===pos&&x.vorp>0).length);
+      scar[pos]=Math.max(.75,Math.min(1.5,Math.sqrt(Math.max(0,dem[pos]||0)/sup[pos])));
+    }
+  }
+  const scored=avail.slice(0,150).map(x=>{
+    const g=gain(x);
+    const depth=g>.5?0:.12*x.vorp; // bench insurance value only
+    let score, cliff=0;
+    if(p.type==='snake'){ cliff=Math.max(0,g-(bestLaterGain[x.pos]||0)); score=g+.9*cliff+depth }
+    else score=g*(scar[x.pos]||1)+depth;
+    return {x,g,cliff,score};
+  }).sort((a,b)=>b.score-a.score);
+  const out=[];
+  for(const {x,g,cliff} of scored){
+    const why=[];
+    if(g>.5){
+      why.push('+'+Math.round(g)+' season pts to your starting lineup ('+(g/17).toFixed(1)+'/wk)');
+      if(p.type==='snake'){
+        if(cliff>8) why.push('scarce depth \u2014 waiting one turn costs \u2248'+Math.round(cliff)+' pts at '+x.pos+' (best left: '+laterName[x.pos]+')');
+        else if(cliff<2) why.push(x.pos+' runs deep \u2014 similar value should reach your next pick');
+        if(x.blendRank<=(dstate().picks.length+(nx?nx.until:0))) why.push('likely gone before your pick #'+(nx?nx.overall:''));
+      }else{
+        const sc=scar[x.pos]||1;
+        if(sc>1.08) why.push('position scarcity \u00d7'+sc.toFixed(2)+' \u2014 '+avail.filter(y=>y.pos===x.pos&&y.vorp>0).length+' startable '+x.pos+'s left for '+Math.round(dem[x.pos])+' open league slots');
+        else if(sc<0.92) why.push(x.pos+' oversupplied \u2014 let others overpay');
+        const adj=Math.max(1,Math.round(1+(x.val-1)*infl));
+        const mb=maxBid();
+        why.push('fair $'+x.val+' \u2192 $'+adj+' with inflation'+(adj>mb?' \u2014 above your max bid $'+mb:'')+' \u00b7 '+(g/Math.max(1,adj)).toFixed(1)+' pts/$');
+      }
+    }else{
+      why.push('bench insurance only \u2014 no starting lineup upgrade right now');
+    }
+    out.push({x,g,why});
+    if(out.length>=5) break;
+  }
+  return out;
+}
+function maxBid(){
+  const p=prof(); const {totalOpen}=openSlots();
+  const left=p.budget-teamSpent(p.slot);
+  return Math.max(1,left-(Math.max(1,totalOpen)-1));
+}
+function starterPlan(){ // suggested $ per open starter slot
+  const p=prof(); const {s}=openSlots(); const taken=takenSet(); const infl=inflation();
+  const left=p.budget-teamSpent(p.slot);
+  const benchOpen=s.BN;
+  const reserveLeft=Math.min(left-1, Math.max(benchOpen, Math.round(p.reserve*(benchOpen/Math.max(1,p.slots.BN)))));
+  const spend=Math.max(0,left-reserveLeft);
+  const slots=[];
+  const bestFor=pos=>{ const c=pool.find(x=>!taken.has(x.id)&&(pos==='FLEX'?['RB','WR','TE'].includes(x.pos):pos==='SFLX'?['QB','RB','WR','TE'].includes(x.pos):x.pos===pos)); return c?Math.max(1,(c.val-1)*infl+1):1 };
+  for(const k of ['QB','RB','WR','TE','FLEX','SFLX','K','DST']) for(let i=0;i<s[k];i++) slots.push({k,v:bestFor(k)});
+  const sum=slots.reduce((a,x)=>a+x.v,0)||1;
+  slots.forEach(x=>x.plan=Math.max(1,Math.round(spend*x.v/sum)));
+  return {slots,reserveLeft,spend};
+}
+
+/* ================= rendering ================= */
+function posTag(pos){ return '<span class="tag pos-'+pos+'">'+pos+'</span>' }
+function renderPoolPreview(){
+  const el=$('poolPreview'); el.innerHTML='';
+  pool.slice(0,120).forEach((x,i)=>{
+    el.insertAdjacentHTML('beforeend',`<div class="prow"><span class="rk mono">${i+1}</span>${posTag(x.pos)}
+      <span class="name">${x.name}<span>${x.team}</span></span>
+      <span class="val">$${x.val||1}</span></div>`);
+  });
+}
+function renderBoard(){
+  const el=$('board'); el.innerHTML='';
+  const q=norm($('search').value);
+  const taken=takenSet(); const infl=inflation(); const p=prof();
+  const nx=p&&p.type==='snake'?snakeNextPick():null;
+  let list=pool;
+  if(view!=='best') list=pool.filter(x=>x.pos===view);
+  if(q) list=pool.filter(x=>norm(x.name).includes(q));
+  list.slice(0,80).forEach(x=>{
+    const isTaken=taken.has(x.id);
+    const adj=p&&p.type==='auction'?Math.max(1,Math.round(1+(x.val-1)*infl)):null;
+    const urgent=!isTaken&&nx&&x.blendRank<=(dstate().picks.length+nx.until);
+    el.insertAdjacentHTML('beforeend',`<div class="prow ${isTaken?'taken':''}" data-id="${x.id}">
+      <span class="rk mono">${Math.round(x.blendRank)}</span>${posTag(x.pos)}
+      <span class="name">${x.name}<span>${x.team}</span>${urgent?' <span class="flag">GONE SOON</span>':''}</span>
+      ${adj!=null?'<span class="val">$'+adj+'</span>':'<span class="val" style="color:var(--chalk-dim)">'+Math.round(x.vorp)+'v</span>'}
+    </div>`);
+  });
+  el.querySelectorAll('.prow:not(.taken)').forEach(r=>r.onclick=()=>openModal(r.dataset.id));
+  $('pickCount').textContent=dstate()?dstate().picks.length+' picks made':'';
+}
+function renderRecs(){
+  const el=$('recs'); el.innerHTML='';
+  if(!pool.length){ el.innerHTML='<p class="muted">Build the player pool in Rankings first.</p>'; return }
+  recommendations().forEach(({x,g,why},i)=>{
+    el.insertAdjacentHTML('beforeend',`<div class="rec"><div class="top">
+      <span class="mono muted">${i+1}</span>${posTag(x.pos)}<span class="name">${x.name}</span>
+      <span class="val">${prof().type==='auction'?'$'+Math.max(1,Math.round(1+(x.val-1)*inflation())):'+'+Math.round(g)+' pts'}</span></div>
+      <div class="why">${why.join(' · ')}</div></div>`);
+  });
+}
+function renderRoster(){
+  const p=prof(); if(!p) return;
+  const el=$('myRoster'); el.innerHTML='';
+  const mine=myPicks().map(pk=>({pk,pl:matchPick(pk)})).filter(o=>o.pl);
+  const s={...p.slots}; const placed=[];
+  const rows=[];
+  mine.sort((a,b)=>b.pl.vorp-a.pl.vorp).forEach(o=>{
+    const pos=o.pl.pos; let slot=null;
+    if(s[pos]>0){s[pos]--;slot=pos}
+    else if(['RB','WR','TE'].includes(pos)&&s.FLEX>0){s.FLEX--;slot='FLEX'}
+    else if(['QB','RB','WR','TE'].includes(pos)&&s.SFLX>0){s.SFLX--;slot='SFLX'}
+    else if(s.BN>0){s.BN--;slot='BN'}
+    placed.push({slot,o});
+  });
+  const plan=p.type==='auction'?starterPlan():null;
+  const planByKey={};
+  if(plan) plan.slots.forEach(x=>{ (planByKey[x.k]=planByKey[x.k]||[]).push(x.plan) });
+  for(const k of ['QB','RB','WR','TE','FLEX','SFLX','K','DST','BN']){
+    const total=p.slots[k];
+    const fills=placed.filter(x=>x.slot===k);
+    for(let i=0;i<total;i++){
+      const f=fills[i];
+      let planTxt='';
+      if(plan&&k!=='BN'&&!f&&planByKey[k]&&planByKey[k].length){ planTxt='<span class="plan">plan $'+planByKey[k].shift()+'</span>' }
+      el.insertAdjacentHTML('beforeend',`<div class="slot"><span class="sl">${k}</span>
+        ${f?`${posTag(f.o.pl.pos)}<span class="who">${f.o.pl.name}</span>${f.o.pk.price?'<span class="paid">$'+f.o.pk.price+'</span>':''}`
+           :`<span class="who empty">open</span>${planTxt}`}</div>`);
+    }
+  }
+  if(plan) el.insertAdjacentHTML('beforeend',`<div class="muted" style="padding:8px 10px">Bench reserve held: <b class="mono" style="color:var(--gold)">$${plan.reserveLeft}</b> · starter spend pool $${plan.spend}</div>`);
+}
+function renderBudgets(){
+  const p=prof(); const el=$('budgets'); el.innerHTML='';
+  if(p.type!=='auction'){ $('budgetPanel').style.display='none'; return }
+  $('budgetPanel').style.display='block';
+  const st=dstate(); const rosterSize=Object.values(p.slots).reduce((a,b)=>a+b,0);
+  for(let t=1;t<=p.teams;t++){
+    const left=p.budget-teamSpent(t), open=rosterSize-teamCount(t);
+    const mx=Math.max(0,left-(Math.max(1,open)-1));
+    el.insertAdjacentHTML('beforeend',`<div class="bteam ${t===p.slot?'me':''}" data-t="${t}" title="Click to set as my team">
+      <span class="nm">${t===p.slot?'★ ':''}${st.teamNames[t-1]||'Team '+t}</span>
+      <span class="mono">$${left}</span><span class="mx">max $${mx} · ${open} spots</span></div>`);
+  }
+  $('inflLbl').textContent='Market inflation: '+inflation().toFixed(2)+'× (values on the board are inflation-adjusted)';
+  el.querySelectorAll('.bteam').forEach(r=>r.onclick=()=>{
+    const t=+r.dataset.t; if(t===p.slot)return;
+    if(confirm('Set "'+(st.teamNames[t-1]||'Team '+t)+'" as YOUR team?')){ p.slot=t; store.set('profiles',profiles); refreshAll() }
+  });
+}
+function renderRecent(){
+  const st=dstate(); const el=$('recent'); el.innerHTML='';
+  st.picks.slice(-14).reverse().forEach(pk=>{
+    const pl=matchPick(pk); const nm=pl?pl.name:(pk.nm||pk.pid);
+    el.insertAdjacentHTML('beforeend',`<div class="slot"><span class="who">${nm}</span>
+      <span class="muted">${st.teamNames[pk.by-1]||('Team '+pk.by)}</span>${pk.price?'<span class="paid">$'+pk.price+'</span>':''}</div>`);
+  });
+}
+function renderStrip(){
+  const p=prof(); if(!p) return;
+  const {s,starterOpen,totalOpen}=openSlots();
+  if(p.type==='auction'){
+    const left=p.budget-teamSpent(p.slot); const mb=maxBid(); const plan=starterPlan();
+    $('bigLbl').textContent='Max bid'; $('bigVal').textContent='$'+mb;
+    $('bigVal').classList.toggle('red', left<totalOpen);
+    $('spotsVal').textContent=starterOpen+' / '+totalOpen+' total';
+    $('cash1Lbl').textContent='Budget left'; $('cash1').textContent='$'+left;
+    $('cash2Lbl').textContent='Starter spend'; $('cash2').textContent='$'+plan.spend;
+  }else{
+    const nx=snakeNextPick();
+    $('bigLbl').textContent='Picks till you'; $('bigVal').textContent=nx.until;
+    $('bigVal').classList.remove('red');
+    $('spotsVal').textContent=starterOpen+' open';
+    $('cash1Lbl').textContent='Your next'; $('cash1').textContent='#'+nx.overall;
+    $('cash2Lbl').textContent='Round'; $('cash2').textContent=nx.round;
+  }
+  const recs=pool.length?recommendations():[];
+  $('target').textContent=recs.length?recs[0].x.name:'—';
+}
+function refreshAll(){
+  if(!prof()) return;
+  computeValues();
+  renderBoard(); renderRecs(); renderRoster(); renderBudgets(); renderRecent(); renderStrip();
+  $('draftTitle').textContent=prof().name+' — '+prof().type+' ('+prof().platform+')';
+}
+
+/* ================= manual pick modal ================= */
+let modalPid=null, modalTeam=null;
+function openModal(pid){
+  const p=prof(); const x=pool.find(y=>y.id===pid); if(!x) return;
+  modalPid=pid; modalTeam=p.slot;
+  $('mName').textContent=x.name; $('mMeta').innerHTML=posTag(x.pos)+' '+x.team+' · fair $'+x.val+' · VORP '+Math.round(x.vorp);
+  $('mAuction').style.display=p.type==='auction'?'block':'none';
+  $('mSnake').style.display=p.type==='auction'?'none':'block';
+  $('mPrice').value='';
+  const chips=t=>{
+    const el=$(t); el.innerHTML='';
+    const st=dstate();
+    for(let i=1;i<=p.teams;i++){
+      const b=document.createElement('button'); b.textContent=(i===p.slot?'★ ':'')+(st.teamNames[i-1]||'T'+i);
+      if(i===modalTeam)b.classList.add('on');
+      b.onclick=()=>{ modalTeam=i; el.querySelectorAll('button').forEach(z=>z.classList.remove('on')); b.classList.add('on') };
+      el.appendChild(b);
+    }
+  };
+  chips('mTeams'); chips('mTeams2');
+  $('modal').classList.add('open');
+  if(p.type==='auction') setTimeout(()=>$('mPrice').focus(),50);
+}
+$('mCancel').onclick=()=>$('modal').classList.remove('open');
+$('modal').onclick=e=>{ if(e.target.id==='modal') $('modal').classList.remove('open') };
+$('mConfirm').onclick=()=>{
+  const p=prof(); const st=dstate();
+  const price=p.type==='auction'?Math.max(1,+$('mPrice').value||1):null;
+  st.picks.push({pid:modalPid,by:modalTeam,price});
+  saveDrafts(); $('modal').classList.remove('open'); $('search').value='';
+  refreshAll();
+};
+$('undoBtn').onclick=()=>{ const st=dstate(); if(st.sleeper.draftId) return toast('Live sync draft — picks come from Sleeper'); st.picks.pop(); saveDrafts(); refreshAll() };
+$('resetDraft').onclick=()=>{ if(!confirm('Clear all picks for this league?'))return; const st=dstate(); st.picks=[]; saveDrafts(); refreshAll() };
+$('search').oninput=()=>renderBoard();
+document.querySelectorAll('.viewtabs button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.viewtabs button').forEach(x=>x.classList.remove('on')); b.classList.add('on');
+  view=b.dataset.view; renderBoard();
+});
+
+/* ================= ESPN bridge (Tampermonkey userscript posts here) ================= */
+function espnSlot(key){
+  const st=dstate(); st.espnMap=st.espnMap||{};
+  if(st.espnMap[key]) return st.espnMap[key];
+  const used=new Set(Object.values(st.espnMap));
+  let slot=1; const T=prof().teams;
+  while(used.has(slot)&&slot<T) slot++;
+  st.espnMap[key]=slot;
+  if(typeof key==='string'&&!/^t\d+$/.test(key)&&st.teamNames[slot-1]&&/^Team \d+$/.test(st.teamNames[slot-1]))
+    st.teamNames[slot-1]=key.slice(0,22);
+  return slot;
+}
+function espnLive(n,total){ $('syncDot').classList.add('live');
+  $('syncLbl').textContent='ESPN bridge live · '+(total!=null&&total>n? n+'/'+total+' picks matched — rebuild pool?' : n+' picks') }
+window.addEventListener('message',ev=>{
+  const d=ev.data; if(!d||typeof d!=='object'||!prof()) return;
+  if(d.type==='wr-espn-picks'&&Array.isArray(d.picks)){
+    const st=dstate(); const out=[];
+    const NICK={'cardinals':'ARI','falcons':'ATL','ravens':'BAL','bills':'BUF','panthers':'CAR','bears':'CHI','bengals':'CIN','browns':'CLE','cowboys':'DAL','broncos':'DEN','lions':'DET','packers':'GB','texans':'HOU','colts':'IND','jaguars':'JAX','chiefs':'KC','raiders':'LV','chargers':'LAC','rams':'LAR','dolphins':'MIA','vikings':'MIN','patriots':'NE','saints':'NO','giants':'NYG','jets':'NYJ','eagles':'PHI','steelers':'PIT','49ers':'SF','niners':'SF','seahawks':'SEA','buccaneers':'TB','titans':'TEN','commanders':'WAS'};
+    d.picks.forEach(pk=>{
+      let pl=null;
+      if(pk.espnId!=null) pl=pool.find(x=>x.espn&&+x.espn===+pk.espnId);
+      if(!pl&&pk.name) pl=pool.find(x=>norm(x.name)===norm(pk.name));
+      if(!pl&&pk.name&&(pk.pos==='DST'||NICK[norm(pk.name)])){
+        const ab=pk.nflTeam||NICK[norm(pk.name)];
+        if(ab) pl=pool.find(x=>x.pos==='DST'&&(x.team===ab||x.id===ab||norm(x.name).includes(norm(pk.name))));
+      }
+      if(!pl&&pk.name){ // unique fuzzy: contains match, narrowed by pos/team when known
+        const key=norm(pk.name);
+        const cands=pool.filter(x=>(norm(x.name).includes(key)||key.includes(norm(x.name)))
+          &&(!pk.pos||x.pos===pk.pos)&&(!pk.nflTeam||!x.team||x.team===pk.nflTeam));
+        if(cands.length===1) pl=cands[0];
+      }
+      if(!pl) return;
+      out.push({pid:pl.id, by:espnSlot(pk.teamName?String(pk.teamName):'t'+pk.teamId), price:pk.amount!=null?+pk.amount:null, nm:pl.name});
+    });
+    if(JSON.stringify(out)!==JSON.stringify(st.picks)){ st.picks=out; saveDrafts(); refreshAll() }
+    espnLive(out.length, d.picks.length);
+  }
+  if(d.type==='wr-espn-texts'&&Array.isArray(d.texts)){
+    const st=dstate(); let changed=false;
+    d.texts.forEach(line=>{
+      if(typeof line!=='string')return;
+      const ln=norm(line);
+      const pl=pool.find(x=>ln.includes(norm(x.name)));
+      if(!pl||st.picks.some(pk=>pk.pid===pl.id)) return;
+      const amt=(line.match(/\$\s?(\d+)/)||[])[1];
+      const last=pl.name.split(' ').pop().toLowerCase();
+      let rest=line.slice(line.toLowerCase().lastIndexOf(last)+last.length);
+      rest=rest.replace(/\$\s?\d+/g,'').replace(/\b(QB|RB|WR|TE|K|D\/?ST)\b/ig,'')
+               .replace(/\b[A-Z]{2,3}\b/g,'').replace(/[^A-Za-z\x27 ]/g,' ').replace(/\s+/g,' ').trim();
+      const by=rest.length>2?espnSlot(rest):espnSlot('unk');
+      st.picks.push({pid:pl.id,by,price:amt?+amt:null,nm:pl.name});
+      changed=true;
+    });
+    if(changed){ saveDrafts(); refreshAll() }
+    espnLive(st.picks.length);
+  }
+});
+
+/* ================= stadium specks ================= */
+(function(){
+  const c=document.getElementById('fx'); if(!c) return;
+  if(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const ctx=c.getContext('2d'); let W,H,pts=[];
+  function size(){ W=c.width=innerWidth; H=c.height=innerHeight;
+    pts=Array.from({length:Math.min(70,Math.floor(W*H/26000))},()=>({
+      x:Math.random()*W,y:Math.random()*H,r:Math.random()*1.6+.4,
+      s:Math.random()*.3+.06,o:Math.random()*.4+.1,w:Math.random()*6.28})) }
+  addEventListener('resize',size); size();
+  (function loop(t){
+    ctx.clearRect(0,0,W,H);
+    for(const p of pts){
+      p.y-=p.s; p.x+=Math.sin((t||0)/4000+p.w)*.08;
+      if(p.y<-4){p.y=H+4;p.x=Math.random()*W}
+      ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,7);
+      ctx.fillStyle='rgba(232,183,26,'+(p.o*.45)+')'; ctx.fill();
+    }
+    requestAnimationFrame(loop);
+  })(0);
+})();
+
+/* ================= boot ================= */
+(function(){
+  if(!profiles.length){ const p=defaultProfile(); profiles.push(p); activeId=p.id; store.set('profiles',profiles); store.set('activeId',activeId) }
+  if(!activeId) activeId=profiles[0].id;
+  renderProfileSel(); loadProfileForm();
+  const cached=store.get('poolCache',null);
+  if(cached&&cached.length){ pool=cached; computeValues(); renderPoolPreview() }
+  if(slimPlayers) $('slpMsg').textContent=slimPlayers.length+' players cached ✓';
+  if(fpRows) $('csvMsg').textContent=fpRows.length+' CSV rows cached ✓';
+  const st=dstate(); if(st&&st.sleeper&&st.sleeper.draftId) startPolling();
+  refreshAll();
+})();
+</script>
+</body>
+</html>
